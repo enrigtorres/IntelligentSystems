@@ -165,3 +165,5 @@ for (i in 1:length(pattern2)){
   print(unlist(strings[!is.na(unlist(strings))]))
   print(" ")
 }
+
+#testing
