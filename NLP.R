@@ -1,10 +1,14 @@
 #load libraries
+library(tm)
 library(rJava)
 library(NLP) 
 library(openNLP) 
 library(tm)
 library(stringr)
 library(readtext)
+library(GGally)
+library(RColorBrewer)
+library(wordcloud)
 
 #functions
 getAnnotationsFromDocument = function(doc){
@@ -105,12 +109,70 @@ setwd(dirname(current_path ))
 
 #load text
 source = DirSource("corpus/", encoding = "UTF-8")
-corpus = Corpus(source)
+corpus_0 = Corpus(source)
+corpus <- tm_map(corpus_0, content_transformer(tolower)) #important, remark on report
 inspect(corpus[[1]])
 
-annotations = lapply(corpus, getAnnotationsFromDocument)
-head(annotations[[1]])
-tail(annotations[[1]])
+#First part: word analysis
+
+#default term matrix
+tdm = TermDocumentMatrix(corpus)
+
+freq=rowSums(as.matrix(tdm))
+tail(sort(freq),n=10)
+sum(freq == 1)
+plot(sort(freq, decreasing = T),col="blue",main="Word frequencies", xlab="Frequency-based rank", ylab = "Frequency")
+
+#custom stop words, without appeared 14 times and it is not interesting in medical field
+myStopWords = c(stopwords(),"without")
+
+tdm = TermDocumentMatrix(corpus,
+                         control=list(stopwords = myStopWords,
+                                      removePunctuation = T, 
+                                      removeNumbers = T,
+                                      stemming = T))
+length(dimnames(tdm)$Terms)
+head(dimnames(tdm)$Terms,10)
+tail(dimnames(tdm)$Terms,10)
+freq=rowSums(as.matrix(tdm))
+head(freq,10)
+tail(freq,10)
+
+plot(sort(freq, decreasing = T),col="blue",main="Word frequencies", xlab="Frequency-based rank", ylab = "Frequency")
+
+tail(sort(freq),n=10)
+
+#bar plot
+
+freq=rowSums(as.matrix(tdm))
+high.freq=tail(sort(freq),n=10)
+hfp.df=as.data.frame(sort(high.freq))
+hfp.df$names <- rownames(hfp.df) 
+ggplot(hfp.df, aes(reorder(names,high.freq), high.freq)) +
+  geom_bar(stat="identity") + coord_flip() + 
+  xlab("Terms") + ylab("Frequency") +
+  ggtitle("Term frequencies")
+
+#word cloud
+pal=brewer.pal(8,"Blues")
+pal=pal[-(1:3)]
+set.seed(1234)
+
+corpus.ngrams = VCorpus(source)
+
+tdm.unigram = TermDocumentMatrix(corpus.ngrams,
+                                 control=list(stopwords = c(myStopWords),
+                                              removePunctuation = T, 
+                                              removeNumbers = T)) 
+freq = sort(rowSums(as.matrix(tdm.unigram)), decreasing = T)
+
+word.cloud=wordcloud(words=names(freq), freq=freq,
+                     min.freq=20, random.order=F, colors=pal)
+
+#--> Patient is the most frequent, makes sense because texts that are being used are from different fields, if
+#we take only allergy, maybe nasal will be the most frequent
+
+#Second part: analyze texts by patterns
 
 #1. Find patterns: Allergy
 pattern0=c("allergy")
@@ -138,7 +200,6 @@ pattern1=c(pattern1,"scrotal")
 pattern1=c(pattern1,"prostate")
 
 matches1= detectPatternsInCorpus(corpus, pattern1)
-matches1[!is.na(matches1[3]),c(1,3)]
 
 countMatchesPerRow(matches1)
 countMatchesPerColumn(matches1)
@@ -151,7 +212,7 @@ for (i in 1:length(pattern1)){
 }
 
 #3. For radiology text, which exam have been done to the patient?
-pattern2=c("EXAM: , ([A-z]* [A-z]*)")
+pattern2=c("exam: , ([A-z]* [A-z]*)")
 
 matches2= detectPatternsInCorpus(corpus, pattern2)
 
@@ -165,5 +226,3 @@ for (i in 1:length(pattern2)){
   print(unlist(strings[!is.na(unlist(strings))]))
   print(" ")
 }
-
-#testing
